@@ -1,41 +1,46 @@
+"use strict";
 /* ==========================================================================
- * timestamp-converter.js — 时间戳转换工具
- * 实时时钟、时间戳 ↔ 日期双向转换（秒/毫秒自动识别）、相对时间
+ * timestamp-converter.ts — 时间戳转换工具
+ * 实时时钟、时间戳 ↔ 日期双向转换（秒/毫秒自动识别）、ISO 8601
+ * 编译为 js/timestamp-converter.js（npm run build），请勿直接改 js/ 下的产物
  * ========================================================================== */
 (function () {
-  'use strict';
-
-  const AUTO_MS_THRESHOLD = 1e12; // 自动模式下：绝对值 ≥ 1e12 视为毫秒（即 2001-09 之后）
-
-  function pad(n) { return App.pad2(n); }
-
-  function fmtLocal(d) {
-    return d.getFullYear() + '-' + pad(d.getMonth() + 1) + '-' + pad(d.getDate()) +
-      ' ' + pad(d.getHours()) + ':' + pad(d.getMinutes()) + ':' + pad(d.getSeconds());
-  }
-
-  function fmtUtc(d) {
-    return d.getUTCFullYear() + '-' + pad(d.getUTCMonth() + 1) + '-' + pad(d.getUTCDate()) +
-      ' ' + pad(d.getUTCHours()) + ':' + pad(d.getUTCMinutes()) + ':' + pad(d.getUTCSeconds());
-  }
-
-  function weekday(d) { return '星期' + App.WEEKDAYS[d.getDay()]; }
-
-  function fmtCnDate(d) {
-    return d.getFullYear() + ' 年 ' + (d.getMonth() + 1) + ' 月 ' + d.getDate() + ' 日 · ' + weekday(d);
-  }
-
-  function toLocalInputValue(d) {
-    return d.getFullYear() + '-' + pad(d.getMonth() + 1) + '-' + pad(d.getDate()) +
-      'T' + pad(d.getHours()) + ':' + pad(d.getMinutes()) + ':' + pad(d.getSeconds());
-  }
-
-  const tool = {
-    title: '时间戳',
-    _timer: 0,
-
-    render(root) {
-      root.innerHTML = `
+    'use strict';
+    const AUTO_MS_THRESHOLD = 1e12; // 自动模式下：绝对值 ≥ 1e12 视为毫秒（即 2001-09 之后）
+    function pad(n) { return App.pad2(n); }
+    function fmtLocal(d) {
+        return d.getFullYear() + '-' + pad(d.getMonth() + 1) + '-' + pad(d.getDate()) +
+            ' ' + pad(d.getHours()) + ':' + pad(d.getMinutes()) + ':' + pad(d.getSeconds());
+    }
+    function fmtUtc(d) {
+        return d.getUTCFullYear() + '-' + pad(d.getUTCMonth() + 1) + '-' + pad(d.getUTCDate()) +
+            ' ' + pad(d.getUTCHours()) + ':' + pad(d.getUTCMinutes()) + ':' + pad(d.getUTCSeconds());
+    }
+    function weekday(d) { return '星期' + App.WEEKDAYS[d.getDay()]; }
+    function fmtCnDate(d) {
+        return d.getFullYear() + ' 年 ' + (d.getMonth() + 1) + ' 月 ' + d.getDate() + ' 日 · ' + weekday(d);
+    }
+    function toLocalInputValue(d) {
+        return d.getFullYear() + '-' + pad(d.getMonth() + 1) + '-' + pad(d.getDate()) +
+            'T' + pad(d.getHours()) + ':' + pad(d.getMinutes()) + ':' + pad(d.getSeconds());
+    }
+    const tool = {
+        title: '时间戳',
+        _timer: 0,
+        clockTime: null,
+        clockDate: null,
+        clockSec: null,
+        clockMs: null,
+        tsInput: null,
+        tsUnit: null,
+        tsUnitBadge: null,
+        tsError: null,
+        tsErrorMsg: null,
+        tsIds: [],
+        dateInput: null,
+        dateIds: [],
+        render(root) {
+            root.innerHTML = `
         <header class="tool-header">
           <div>
             <h1 class="tool-title">时间戳</h1>
@@ -144,126 +149,116 @@
             </div>
           </section>
         </div>`;
-
-      this.clockTime = root.querySelector('#clockTime');
-      this.clockDate = root.querySelector('#clockDate');
-      this.clockSec = root.querySelector('#clockSec');
-      this.clockMs = root.querySelector('#clockMs');
-
-      this.tsInput = root.querySelector('#tsInput');
-      this.tsUnit = root.querySelector('#tsUnit');
-      this.tsUnitBadge = root.querySelector('#tsUnitBadge');
-      this.tsError = root.querySelector('#tsError');
-      this.tsErrorMsg = root.querySelector('#tsErrorMsg');
-      this.tsIds = ['tsLocal', 'tsLocalExtra', 'tsUtc', 'tsIso']
-        .map((id) => root.querySelector('#' + id));
-
-      this.dateInput = root.querySelector('#dateInput');
-      this.dateIds = ['dateSec', 'dateMs', 'dateIso'].map((id) => root.querySelector('#' + id));
-
-      this.tsInput.addEventListener('input', () => this.convertTs());
-      this.tsUnit.addEventListener('change', () => this.convertTs());
-
-      this.dateInput.addEventListener('input', () => this.convertDate());
-      root.querySelector('#btnNow').addEventListener('click', () => {
-        this.dateInput.value = toLocalInputValue(new Date());
-        this.convertDate();
-      });
-
-      App.bindCopyRow(root);
-      this.resetTs();
-      this.dateInput.value = toLocalInputValue(new Date());
-      this.convertDate();
-    },
-
-    onShow() { this.startClock(); },
-    onHide() { this.stopClock(); },
-
-    startClock() {
-      this.tick();
-      if (!this._timer) this._timer = setInterval(() => this.tick(), 1000);
-    },
-
-    stopClock() {
-      clearInterval(this._timer);
-      this._timer = 0;
-    },
-
-    tick() {
-      const now = new Date();
-      this.clockTime.textContent =
-        pad(now.getHours()) + ':' + pad(now.getMinutes()) + ':' + pad(now.getSeconds());
-      this.clockDate.textContent = fmtCnDate(now);
-      this.clockSec.textContent = String(Math.floor(now.getTime() / 1000));
-      this.clockMs.textContent = String(now.getTime());
-    },
-
-    setRow(el, value) {
-      el.textContent = value;
-      el.classList.toggle('empty', value === '—');
-    },
-
-    resetTs() {
-      this.tsIds.forEach((el) => this.setRow(el, '—'));
-      this.tsError.hidden = true;
-      this.tsUnitBadge.hidden = true;
-    },
-
-    tsFail(msg) {
-      this.tsIds.forEach((el) => this.setRow(el, '—'));
-      this.tsUnitBadge.hidden = true;
-      this.tsErrorMsg.textContent = msg;
-      this.tsError.hidden = false;
-    },
-
-    convertTs() {
-      const raw = this.tsInput.value.trim();
-      if (!raw) { this.resetTs(); return; }
-
-      const cleaned = raw.replace(/[,\s_]/g, '');
-      if (!/^-?\d+$/.test(cleaned)) {
-        this.tsFail('请输入有效的整数时间戳'); return;
-      }
-      const v = Number(cleaned);
-      if (!Number.isSafeInteger(v)) {
-        this.tsFail('数值超出 JavaScript 安全整数范围'); return;
-      }
-
-      const unit = this.tsUnit.value;
-      const isMs = unit === 'ms' || (unit === 'auto' && Math.abs(v) >= AUTO_MS_THRESHOLD);
-      const d = new Date(isMs ? v : v * 1000);
-      if (isNaN(d.getTime())) { this.tsFail('无法解析为有效日期'); return; }
-
-      this.tsError.hidden = true;
-      if (unit === 'auto') {
-        this.tsUnitBadge.textContent = isMs ? '按毫秒解析' : '按秒解析';
-        this.tsUnitBadge.hidden = false;
-      } else {
-        this.tsUnitBadge.hidden = true;
-      }
-
-      this.setRow(this.tsIds[0], fmtLocal(d));
-      this.tsIds[1].textContent = weekday(d);
-      this.setRow(this.tsIds[2], fmtUtc(d));
-      this.setRow(this.tsIds[3], d.toISOString());
-    },
-
-    convertDate() {
-      const v = this.dateInput.value;
-      if (!v) {
-        this.dateIds.forEach((el) => this.setRow(el, '—'));
-        return;
-      }
-      const d = new Date(v);
-      if (isNaN(d.getTime())) {
-        this.dateIds.forEach((el) => this.setRow(el, '—'));
-        return;
-      }
-      this.setRow(this.dateIds[0], String(Math.floor(d.getTime() / 1000)));
-      this.setRow(this.dateIds[1], String(d.getTime()));
-      this.setRow(this.dateIds[2], d.toISOString());
-    }
-  };
-
-  App.registerTool('timestamp', tool);
+            this.clockTime = root.querySelector('#clockTime');
+            this.clockDate = root.querySelector('#clockDate');
+            this.clockSec = root.querySelector('#clockSec');
+            this.clockMs = root.querySelector('#clockMs');
+            this.tsInput = root.querySelector('#tsInput');
+            this.tsUnit = root.querySelector('#tsUnit');
+            this.tsUnitBadge = root.querySelector('#tsUnitBadge');
+            this.tsError = root.querySelector('#tsError');
+            this.tsErrorMsg = root.querySelector('#tsErrorMsg');
+            this.tsIds = ['tsLocal', 'tsLocalExtra', 'tsUtc', 'tsIso']
+                .map((id) => root.querySelector('#' + id));
+            this.dateInput = root.querySelector('#dateInput');
+            this.dateIds = ['dateSec', 'dateMs', 'dateIso'].map((id) => root.querySelector('#' + id));
+            this.tsInput.addEventListener('input', () => this.convertTs());
+            this.tsUnit.addEventListener('change', () => this.convertTs());
+            this.dateInput.addEventListener('input', () => this.convertDate());
+            root.querySelector('#btnNow').addEventListener('click', () => {
+                this.dateInput.value = toLocalInputValue(new Date());
+                this.convertDate();
+            });
+            App.bindCopyRow(root);
+            this.resetTs();
+            this.dateInput.value = toLocalInputValue(new Date());
+            this.convertDate();
+        },
+        onShow() { this.startClock(); },
+        onHide() { this.stopClock(); },
+        startClock() {
+            this.tick();
+            if (!this._timer)
+                this._timer = setInterval(() => this.tick(), 1000);
+        },
+        stopClock() {
+            clearInterval(this._timer);
+            this._timer = 0;
+        },
+        tick() {
+            const now = new Date();
+            this.clockTime.textContent =
+                pad(now.getHours()) + ':' + pad(now.getMinutes()) + ':' + pad(now.getSeconds());
+            this.clockDate.textContent = fmtCnDate(now);
+            this.clockSec.textContent = String(Math.floor(now.getTime() / 1000));
+            this.clockMs.textContent = String(now.getTime());
+        },
+        setRow(el, value) {
+            el.textContent = value;
+            el.classList.toggle('empty', value === '—');
+        },
+        resetTs() {
+            this.tsIds.forEach((el) => this.setRow(el, '—'));
+            this.tsError.hidden = true;
+            this.tsUnitBadge.hidden = true;
+        },
+        tsFail(msg) {
+            this.tsIds.forEach((el) => this.setRow(el, '—'));
+            this.tsUnitBadge.hidden = true;
+            this.tsErrorMsg.textContent = msg;
+            this.tsError.hidden = false;
+        },
+        convertTs() {
+            const raw = this.tsInput.value.trim();
+            if (!raw) {
+                this.resetTs();
+                return;
+            }
+            const cleaned = raw.replace(/[,\s_]/g, '');
+            if (!/^-?\d+$/.test(cleaned)) {
+                this.tsFail('请输入有效的整数时间戳');
+                return;
+            }
+            const v = Number(cleaned);
+            if (!Number.isSafeInteger(v)) {
+                this.tsFail('数值超出 JavaScript 安全整数范围');
+                return;
+            }
+            const unit = this.tsUnit.value;
+            const isMs = unit === 'ms' || (unit === 'auto' && Math.abs(v) >= AUTO_MS_THRESHOLD);
+            const d = new Date(isMs ? v : v * 1000);
+            if (isNaN(d.getTime())) {
+                this.tsFail('无法解析为有效日期');
+                return;
+            }
+            this.tsError.hidden = true;
+            if (unit === 'auto') {
+                this.tsUnitBadge.textContent = isMs ? '按毫秒解析' : '按秒解析';
+                this.tsUnitBadge.hidden = false;
+            }
+            else {
+                this.tsUnitBadge.hidden = true;
+            }
+            this.setRow(this.tsIds[0], fmtLocal(d));
+            this.tsIds[1].textContent = weekday(d);
+            this.setRow(this.tsIds[2], fmtUtc(d));
+            this.setRow(this.tsIds[3], d.toISOString());
+        },
+        convertDate() {
+            const v = this.dateInput.value;
+            if (!v) {
+                this.dateIds.forEach((el) => this.setRow(el, '—'));
+                return;
+            }
+            const d = new Date(v);
+            if (isNaN(d.getTime())) {
+                this.dateIds.forEach((el) => this.setRow(el, '—'));
+                return;
+            }
+            this.setRow(this.dateIds[0], String(Math.floor(d.getTime() / 1000)));
+            this.setRow(this.dateIds[1], String(d.getTime()));
+            this.setRow(this.dateIds[2], d.toISOString());
+        }
+    };
+    App.registerTool('timestamp', tool);
 })();
