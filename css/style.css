@@ -322,18 +322,6 @@ button {
 }
 .btn-secondary:active { background: var(--surface-soft); }
 
-.btn-text {
-  background: none;
-  border: none;
-  padding: 8px 10px;
-  border-radius: var(--radius-md);
-  color: var(--muted);
-  font: 500 14px/1.4 var(--font-sans);
-  cursor: pointer;
-}
-.btn-text:hover { color: var(--ink); }
-.btn-text:active { background: var(--surface-soft); }
-
 .icon-btn {
   flex: 0 0 auto;
   display: inline-flex;
@@ -347,6 +335,7 @@ button {
   color: var(--ink);
   cursor: pointer;
 }
+
 .icon-btn:active { background: var(--surface-soft); }
 .icon-btn [data-icon] { width: 16px; height: 16px; }
 
@@ -355,11 +344,21 @@ button {
   border-color: transparent;
   color: var(--on-dark);
 }
+
 .icon-btn-dark:active { background: var(--surface-dark-soft); }
 
 .ic-check { display: none; }
 .icon-btn.copied .ic-copy { display: none; }
 .icon-btn.copied .ic-check { display: inline-flex; color: var(--success); }
+
+/* 压缩 ⇄ 还原：同一按钮双图标切换 */
+.icon-btn .ic-max { display: none; }
+.icon-btn.is-raw .ic-min { display: none; }
+.icon-btn.is-raw .ic-max { display: inline-flex; }
+
+/* 展开全部 ⇄ 折叠全部：单图标转向上下的 chevron，有折叠节点时朝下 */
+.icon-fold svg { transform: rotate(90deg); transition: transform 0.15s ease; }
+.icon-fold.is-expanded svg { transform: rotate(-90deg); }
 
 .input,
 .select {
@@ -403,28 +402,6 @@ button {
   color: var(--ink);
 }
 
-.seg {
-  display: inline-flex;
-  align-items: center;
-  gap: 2px;
-  padding: 2px;
-  border: 1px solid var(--hairline);
-  border-radius: var(--radius-md);
-}
-
-.seg-btn {
-  padding: 5px 10px;
-  border: none;
-  border-radius: var(--radius-sm);
-  background: transparent;
-  color: var(--muted);
-  font: 500 13px/1.4 var(--font-sans);
-  cursor: pointer;
-}
-.seg-btn.active { background: var(--surface-card); color: var(--ink); }
-
-.flex-spacer { flex: 1; }
-
 .pane-title {
   font: 500 12px/1.4 var(--font-sans);
   letter-spacing: 1.5px;
@@ -457,8 +434,7 @@ button {
   min-height: 36px;
 }
 
-.pane-head-right { display: flex; align-items: center; gap: 2px; }
-.pane-head-right .btn-text { padding: 4px 8px; font-size: 13px; }
+.pane-head-right { display: flex; align-items: center; gap: 6px; }
 
 .json-input {
   flex: 1;
@@ -472,13 +448,6 @@ button {
   resize: none;
   -moz-tab-size: 4;
   tab-size: 4;
-}
-
-.pane-foot {
-  display: flex;
-  align-items: center;
-  gap: var(--sp-sm);
-  flex-wrap: wrap;
 }
 
 /* 输出窗口：与左侧输入框同款——画布底色 + 发丝线边框，单层背景 */
@@ -531,6 +500,18 @@ html[data-theme="dark"] .code-window {
 .jt-line { position: relative; padding-left: 18px; white-space: pre; }
 .jt-root > .jt-line { padding-left: 0; }
 
+/* 压缩视图：整个 JSON 收成一行原始文本 */
+.json-raw {
+  flex: 1;
+  min-height: 0;
+  margin: 0;
+  overflow: auto;
+  padding: 14px 16px;
+  font: 400 13px/1.8 var(--font-mono);
+  color: var(--code-base);
+  white-space: pre;
+}
+
 .jt-arrow {
   position: absolute;
   left: 2px;
@@ -546,7 +527,7 @@ html[data-theme="dark"] .code-window {
 .jt-arrow svg { width: 12px; height: 12px; transform: rotate(90deg); transition: transform 0.15s ease; }
 .jt-node.collapsed > .jt-line .jt-arrow svg { transform: rotate(0deg); }
 
-.jt-children { margin-left: 18px; }
+.jt-children { margin-left: 4ch; }
 .jt-node.collapsed > .jt-children,
 .jt-node.collapsed > .jt-end { display: none; }
 
@@ -566,14 +547,14 @@ html[data-theme="dark"] .code-window {
 .tok-num { color: var(--tok-num); }
 .tok-lit { color: var(--tok-lit); }
 
-.json-tree::-webkit-scrollbar { width: 10px; height: 10px; }
-.json-tree::-webkit-scrollbar-thumb {
+.json-tree::-webkit-scrollbar, .json-raw::-webkit-scrollbar { width: 10px; height: 10px; }
+.json-tree::-webkit-scrollbar-thumb, .json-raw::-webkit-scrollbar-thumb {
   background: var(--code-scrollbar);
   border-radius: var(--radius-pill);
   border: 2px solid var(--canvas);
 }
-.json-tree::-webkit-scrollbar-track { background: transparent; }
-.json-tree::-webkit-scrollbar-corner { background: transparent; }
+.json-tree::-webkit-scrollbar-track, .json-raw::-webkit-scrollbar-track { background: transparent; }
+.json-tree::-webkit-scrollbar-corner, .json-raw::-webkit-scrollbar-corner { background: transparent; }
 
 .code-error {
   flex: 1;

@@ -1,13 +1,15 @@
 "use strict";
 /* ==========================================================================
  * json-formatter.ts — JSON 格式化工具
- * 校验（自研轻量解析器，报错定位到行列）、美化、压缩、可折叠树形输出
+ * 校验（自研轻量解析器，报错定位到行列）、输入实时美化（固定 4 空格缩进）、
+ * 压缩 ⇄ 还原、可折叠树形输出；操作按钮集中在窗格标题行，均为图标
  * 性能：树以 HTML 字符串一次性渲染；大 JSON 分批懒加载，避免长列表卡顿
  * 编译为 js/json-formatter.js（npm run build），请勿直接改 js/ 下的产物
  * ========================================================================== */
 (function () {
     'use strict';
-    const INDENTS = { '2': '  ', '4': '    ', 'tab': '\t' };
+    const INDENT = '    '; // 固定 4 空格
+    const LIVE_DELAY = 300; // 实时格式化防抖
     const INITIAL_BUDGET = 2000; // 首次渲染最多展开的行数，超出部分折叠懒加载
     const EXPAND_BUDGET = 2000; // 每次点击展开 / 加载时最多构建的行数
     /* ---------- 轻量 JSON 校验器：失败时给出精确的行 / 列 ---------- */
@@ -229,15 +231,18 @@
     }
     const tool = {
         title: 'JSON',
-        indent: '4',
         lastOutput: '',
         lastParsed: null,
+        liveTimer: 0,
         input: null,
-        seg: null,
         tree: null,
         error: null,
         errMsg: null,
         errPos: null,
+        raw: null,
+        btnMinify: null,
+        btnFold: null,
+        view: 'tree',
         render(root) {
             root.innerHTML = `
         <header class="tool-header">
@@ -250,14 +255,34 @@
         <div class="json-layout">
           <section class="pane">
             <div class="pane-head">
+              <span class="pane-title">输入</span>
+              <span class="pane-head-right">
+                <button type="button" id="btnClear" class="icon-btn" title="清空" aria-label="清空">
+                  <span data-icon="close"></span>
+                </button>
+              </span>
+            </div>
+            <textarea id="jsonInput" class="json-input" spellcheck="false"></textarea>
+          </section>
+
+          <section class="pane">
+            <div class="pane-head">
               <span class="pane-title">输出</span>
               <span class="pane-head-right">
-                <button type="button" id="btnExpandAll" class="btn-text">展开全部</button>
-                <button type="button" id="btnCollapseAll" class="btn-text">折叠全部</button>
+                <button type="button" id="btnMinify" class="icon-btn" title="压缩" aria-label="压缩">
+                  <span data-icon="minimize" class="ic-min"></span><span data-icon="maximize" class="ic-max"></span>
+                </button>
+                <button type="button" id="btnCopyJson" class="icon-btn" title="复制" aria-label="复制">
+                  <span data-icon="copy" class="ic-copy"></span><span data-icon="check" class="ic-check"></span>
+                </button>
+                <button type="button" id="btnFold" class="icon-btn icon-fold" title="展开全部" aria-label="展开全部">
+                  <span data-icon="chevron"></span>
+                </button>
               </span>
             </div>
             <div class="code-window">
               <div class="json-tree" id="jsonTree" hidden></div>
+              <pre class="json-raw" id="jsonRaw" hidden></pre>
               <div class="code-error" id="jsonError" hidden>
                 <span data-icon="warn"></span>
                 <div>
@@ -267,59 +292,26 @@
                 </div>
               </div>
             </div>
-            <div class="pane-foot">
-              <button type="button" id="btnMinify" class="btn btn-secondary">压缩</button>
-              <button type="button" id="btnCopyJson" class="btn btn-secondary">复制</button>
-            </div>
-          </section>
-
-          <section class="pane">
-            <div class="pane-head">
-              <span class="pane-title">输入</span>
-              <div class="seg" id="indentSeg" role="group" aria-label="缩进宽度">
-                <button type="button" class="seg-btn active" data-indent="4">4 空格</button>
-                <button type="button" class="seg-btn" data-indent="2">2 空格</button>
-                <button type="button" class="seg-btn" data-indent="tab">Tab</button>
-              </div>
-            </div>
-            <textarea id="jsonInput" class="json-input" spellcheck="false"></textarea>
-            <div class="pane-foot">
-              <button type="button" id="btnFormat" class="btn btn-primary">格式化</button>
-              <span class="flex-spacer"></span>
-              <button type="button" id="btnClear" class="btn-text">清空</button>
-            </div>
           </section>
         </div>`;
             this.input = root.querySelector('#jsonInput');
-            this.seg = root.querySelector('#indentSeg');
             this.tree = root.querySelector('#jsonTree');
             this.error = root.querySelector('#jsonError');
             this.errMsg = root.querySelector('#jsonErrorMsg');
             this.errPos = root.querySelector('#jsonErrorPos');
-            root.querySelector('#btnFormat').addEventListener('click', () => this.doFormat());
-            root.querySelector('#btnMinify').addEventListener('click', () => this.doMinify());
+            this.raw = root.querySelector('#jsonRaw');
+            this.btnMinify = root.querySelector('#btnMinify');
+            this.btnFold = root.querySelector('#btnFold');
+            root.querySelector('#btnMinify').addEventListener('click', () => this.toggleView());
+            root.querySelector('#btnFold').addEventListener('click', () => this.toggleFold());
             root.querySelector('#btnClear').addEventListener('click', () => this.clearAll());
-            root.querySelector('#btnExpandAll').addEventListener('click', () => this.expandAll());
-            root.querySelector('#btnCollapseAll').addEventListener('click', () => this.collapseAll());
-            this.seg.addEventListener('click', (e) => {
-                const btn = e.target.closest('.seg-btn');
-                if (!btn)
-                    return;
-                this.seg.querySelectorAll('.seg-btn').forEach((b) => b.classList.toggle('active', b === btn));
-                this.indent = btn.dataset.indent;
-                if (this.lastOutput && !this.tree.hidden)
-                    this.doFormat();
-            });
+            // 输入实时格式化（防抖）
             this.input.addEventListener('input', () => {
-                if (!this.error.hidden)
-                    this.showEmpty();
+                clearTimeout(this.liveTimer);
+                this.liveTimer = setTimeout(() => this.liveUpdate(), LIVE_DELAY);
             });
             this.input.addEventListener('keydown', (e) => {
-                if ((e.ctrlKey || e.metaKey) && e.key === 'Enter') {
-                    e.preventDefault();
-                    this.doFormat();
-                }
-                else if (e.key === 'Tab' && !e.ctrlKey && !e.metaKey && !e.altKey) {
+                if (e.key === 'Tab' && !e.ctrlKey && !e.metaKey && !e.altKey) {
                     e.preventDefault();
                     this.input.setRangeText('    ', this.input.selectionStart, this.input.selectionEnd, 'end');
                 }
@@ -343,30 +335,60 @@
                 else {
                     node.classList.toggle('collapsed');
                 }
+                this.updateFoldBtn();
             });
             App.bindCopy(root.querySelector('#btnCopyJson'), () => this.lastOutput, '已复制结果');
             this.showEmpty();
         },
-        doFormat() { this.process(true); },
-        doMinify() { this.process(false); },
-        process(pretty) {
+        // 输入实时格式化：合法则按当前视图渲染，非法则显示定位报错，为空则清空输出
+        liveUpdate() {
             const src = this.input.value.replace(/^\uFEFF/, ''); // 去掉 BOM
             if (!src.trim()) {
-                this.showError({ message: '输入为空，请先粘贴或输入 JSON 内容。', line: 0, col: 0 });
+                this.showEmpty();
                 return;
             }
             try {
                 validateJson(src);
                 const parsed = JSON.parse(src);
-                const out = pretty
-                    ? JSON.stringify(parsed, null, INDENTS[this.indent])
-                    : JSON.stringify(parsed);
                 this.lastParsed = parsed;
-                this.renderTree(parsed, out, INITIAL_BUDGET);
+                if (this.view === 'raw')
+                    this.renderRaw(JSON.stringify(parsed));
+                else
+                    this.renderTree(parsed, JSON.stringify(parsed, null, INDENT), INITIAL_BUDGET);
             }
             catch (e) {
                 this.showError(e);
             }
+        },
+        // 压缩 ⇄ 还原（一行原始文本 ⇄ 折叠树），同一图标切换
+        toggleView() {
+            this.view = this.view === 'raw' ? 'tree' : 'raw';
+            this.updateMinifyBtn();
+            this.liveUpdate();
+        },
+        updateMinifyBtn() {
+            const label = this.view === 'raw' ? '还原' : '压缩';
+            this.btnMinify.title = label;
+            this.btnMinify.setAttribute('aria-label', label);
+            this.btnMinify.classList.toggle('is-raw', this.view === 'raw');
+        },
+        // 单图标展开 ⇄ 折叠：存在折叠节点时点击 = 展开全部，否则 = 折叠全部
+        toggleFold() {
+            if (this.tree.hidden)
+                return;
+            if (this.tree.querySelector('.jt-node.collapsed'))
+                this.expandAll();
+            else
+                this.collapseAll();
+        },
+        updateFoldBtn() {
+            if (this.tree.hidden)
+                return;
+            const expandable = !!this.tree.querySelector('.jt-node.collapsed');
+            const label = expandable ? '展开全部' : '折叠全部';
+            this.btnFold.title = label;
+            this.btnFold.setAttribute('aria-label', label);
+            this.btnFold.classList.toggle('is-expanded', !expandable);
         },
         // 渲染整棵树：budget 限制初始展开行数，超出的容器折叠懒加载
         renderTree(parsed, outText, budget) {
@@ -376,9 +398,11 @@
             const moreArr = [];
             this.tree.innerHTML = this.buildNodeHTML(parsed, null, true, true, { left: budget }, lazyArr, moreArr);
             this._zipLazy(this.tree, lazyArr, moreArr);
+            this.raw.hidden = true;
             this.error.hidden = true;
             this.tree.hidden = false;
             this.tree.scrollTop = 0;
+            this.updateFoldBtn();
         },
         // innerHTML 之后按文档顺序把数据挂到懒节点上（构建顺序与文档顺序一致）
         _zipLazy(scope, lazyArr, moreArr) {
@@ -388,6 +412,16 @@
             const mores = scope.querySelectorAll('.jt-more');
             for (let i = 0; i < mores.length; i++)
                 mores[i]._more = moreArr[i];
+        },
+        // 压缩视图：整个 JSON 收成一行原始文本
+        renderRaw(text) {
+            this.lastOutput = text;
+            this.raw.textContent = text;
+            this.tree.hidden = true;
+            this.error.hidden = true;
+            this.raw.hidden = false;
+            this.raw.scrollTop = 0;
+            this.raw.scrollLeft = 0;
         },
         // 递归生成一个节点的 HTML
         buildNodeHTML(value, key, isLast, isRoot, ctx, lazyArr, moreArr) {
@@ -513,10 +547,12 @@
                 if (nodes[i].querySelector(':scope > .jt-children'))
                     nodes[i].classList.add('collapsed');
             }
+            this.updateFoldBtn();
         },
         showError(err) {
             const e = err;
             this.tree.hidden = true;
+            this.raw.hidden = true;
             this.error.hidden = false;
             this.errMsg.textContent = e.message || String(err);
             this.errPos.textContent = e.line ? '第 ' + e.line + ' 行 · 第 ' + e.col + ' 列' : '';
@@ -524,10 +560,12 @@
         },
         showEmpty() {
             this.tree.hidden = true;
+            this.raw.hidden = true;
             this.error.hidden = true;
             this.lastOutput = '';
         },
         clearAll() {
+            clearTimeout(this.liveTimer);
             this.input.value = '';
             this.showEmpty();
             this.input.focus();
