@@ -4,12 +4,12 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>工具集 · 前端开发小工具</title>
-  <meta name="description" content="纯前端开发工具集：JSON 格式化、时间戳转换。所有计算均在浏览器本地完成，数据不出浏览器。" />
+  <meta name="description" content="纯前端开发工具集：JSON 格式化、时间戳转换、Base64 格式转换。所有计算均在浏览器本地完成，数据不出浏览器。" />
   <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Cg stroke='%23cc785c' stroke-width='2.4' stroke-linecap='round' fill='none'%3E%3Cpath d='M12 3.5v17'/%3E%3Cpath d='M4.5 7.75l15 8.5'/%3E%3Cpath d='M19.5 7.75l-15 8.5'/%3E%3C/g%3E%3C/svg%3E" />
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
   <link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:wght@500;600&family=Inter:wght@400;500&family=JetBrains+Mono:wght@400;500&family=Noto+Serif+SC:wght@500;600&display=swap" rel="stylesheet" />
-  <link rel="stylesheet" href="css/style.css?v=17" />
+  <link rel="stylesheet" href="css/style.css?v=18" />
 </head>
 <body>
   <div class="app">
@@ -32,6 +32,9 @@
         </a>
         <a class="menu-item" href="#timestamp" data-tool="timestamp">
           <span data-icon="clock"></span>时间戳
+        </a>
+        <a class="menu-item" href="#convert" data-tool="convert">
+          <span data-icon="minimize"></span>格式转换
         </a>
         <div class="menu-item menu-item-soon" aria-disabled="true">
           更多工具<span class="badge-soon">即将上线</span>
@@ -59,6 +62,7 @@
       <main class="workspace">
         <div class="tool-page" id="tool-json"></div>
         <div class="tool-page" id="tool-timestamp" hidden></div>
+        <div class="tool-page" id="tool-convert" hidden></div>
       </main>
     </div>
   </div>
@@ -88,6 +92,7 @@
   <script src="js/app.js?v=12"></script>
   <script src="js/json-formatter.js?v=25"></script>
   <script src="js/timestamp-converter.js?v=26"></script>
+  <script src="js/base64-converter.js?v=1"></script>
   <script>App.init();</script>
 </body>
 </html>

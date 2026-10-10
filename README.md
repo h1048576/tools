@@ -6,6 +6,7 @@
 
 - **JSON 格式化** — 校验（报错定位到行/列）、输入实时美化（固定 4 空格缩进）、压缩 ⇄ 还原、可折叠树形输出
 - **时间戳转换** — 实时时钟、Unix 时间戳 ↔ 日期双向转换（秒/毫秒自动识别）、ISO 8601
+- **格式转换** — UTF-8 字符串 ↔ Base64 转换，支持 Unicode 文本
 
 ## 使用方式
 
@@ -35,6 +36,7 @@ ts/global.d.ts              共享全局类型（App 接口、工具定义、懒
 ts/app.ts                   应用外壳源码：hash 路由、菜单、复制、吐司、图标
 ts/json-formatter.ts        JSON 格式化工具源码
 ts/timestamp-converter.ts   时间戳转换工具源码
+ts/base64-converter.ts     字符串与 Base64 转换工具源码
 js/*.js                     tsc 编译产物（index.html 实际加载的文件）
 ```
 
